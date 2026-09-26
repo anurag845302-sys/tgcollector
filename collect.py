@@ -46,7 +46,6 @@ def mark_seen(uid):
     db.execute("INSERT OR IGNORE INTO seen VALUES (?)", (uid,))
     db.commit()
 
-client = TelegramClient(SESSION, API_ID, API_HASH)
 out = open(OUT_FILE, "a", encoding="utf-8", buffering=1)
 
 def log(msg):
