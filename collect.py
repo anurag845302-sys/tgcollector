@@ -8,7 +8,14 @@ from telethon.errors import FloodWaitError
 
 API_ID = 35377971
 API_HASH = "8f69b0e7086b2ece81bab51b5649df8a"
-SESSION = "collector"
+import os
+from telethon.sessions import StringSession
+
+SESSION_STRING = os.environ.get("TG_SESSION", "")
+if not SESSION_STRING:
+    raise SystemExit("TG_SESSION env var missing")
+
+client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
 TARGETS = [
     "WynnPaySupport",
@@ -22,8 +29,8 @@ TARGETS = [
     -1003988495633,
 ]
 
-OUT_FILE = "members.jsonl"
-DB_FILE = "seen.db"
+OUT_FILE = os.environ.get("OUT_FILE", "/tmp/members.jsonl")
+DB_FILE = os.environ.get("DB_FILE", "/tmp/seen.db")
 
 db = sqlite3.connect(DB_FILE)
 db.execute("CREATE TABLE IF NOT EXISTS seen (user_id INTEGER PRIMARY KEY)")
