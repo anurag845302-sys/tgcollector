@@ -1,0 +1,7 @@
+collector.session
+collector.session-journal
+members.jsonl
+seen.db
+collect.log
+__pycache__/
+*.pyc
