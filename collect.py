@@ -1,10 +1,12 @@
 import asyncio
 import json
+import os
 import sqlite3
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError
+from telethon.sessions import StringSession
 
 API_ID = 35377971
 API_HASH = "8f69b0e7086b2ece81bab51b5649df8a"
