@@ -1,1 +1,1 @@
-worker: python collect.py
+worker: sleep infinity
