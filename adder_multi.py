@@ -24,11 +24,11 @@ API_HASH = "8f69b0e7086b2ece81bab51b5649df8a"
 
 TARGET_GROUP = "@earnmax321"
 
-# Per account config: env var name, daily limit, delay min, delay max
 ACCOUNTS = [
-    {"name": "acc1", "env": "TG_SESSION_1", "daily": 20, "delay_min": 90, "delay_max": 180},
-    {"name": "acc2", "env": "TG_SESSION_2", "daily": 20, "delay_min": 90, "delay_max": 180},
-    {"name": "acc3", "env": "TG_SESSION_3", "daily": 20, "delay_min": 90, "delay_max": 180},
+    {"name": "acc1", "env": "TG_SESSION_1", "daily": 10, "delay_min": 90, "delay_max": 180},
+    {"name": "acc2", "env": "TG_SESSION_2", "daily": 10, "delay_min": 90, "delay_max": 180},
+    {"name": "acc3", "env": "TG_SESSION_3", "daily": 10, "delay_min": 90, "delay_max": 180},
+    {"name": "acc4", "env": "TG_SESSION_4", "daily": 10, "delay_min": 90, "delay_max": 180},
 ]
 
 DB_FILE = os.environ.get("DB_FILE", "/data/seen.db")
@@ -75,17 +75,25 @@ def load_candidates():
     random.shuffle(out)
     return out
 
-async def run_account(cfg, candidates_shared, target):
+async def run_account(cfg, candidates_shared, target, start_offset):
     name = cfg["name"]
-    session_str = os.environ.get(cfg["env"], "")
+    session_str = os.environ.get(cfg["env"], "").strip()
     if not session_str:
-        log(name, f"no session in {cfg['env']}, skipping")
+        log(name, f"SKIP: {cfg['env']} env var missing or empty")
         return 0
 
+    if start_offset > 0:
+        log(name, f"staggering start by {start_offset}s")
+        await asyncio.sleep(start_offset)
+
     client = TelegramClient(StringSession(session_str), API_ID, API_HASH)
-    await client.start()
-    me = await client.get_me()
-    log(name, f"logged in as {me.id} @{me.username}")
+    try:
+        await client.start()
+        me = await client.get_me()
+        log(name, f"logged in as {me.id} @{me.username}")
+    except Exception as e:
+        log(name, f"LOGIN FAILED: {type(e).__name__}: {e}")
+        return 0
 
     added = 0
     failed = 0
@@ -137,33 +145,45 @@ async def run_account(cfg, candidates_shared, target):
         await asyncio.sleep(d)
 
     log(name, f"DONE added={added} failed={failed}")
-    await client.disconnect()
+    try:
+        await client.disconnect()
+    except Exception:
+        pass
     return added
 
 async def main():
-    # resolve target with first account
-    first = os.environ.get(ACCOUNTS[0]["env"], "")
+    # check env vars
+    for cfg in ACCOUNTS:
+        v = os.environ.get(cfg["env"], "").strip()
+        log("boot", f"{cfg['env']}: {'OK len=' + str(len(v)) if v else 'MISSING'}")
+
+    first = os.environ.get(ACCOUNTS[0]["env"], "").strip()
     if not first:
-        print("no first account session")
+        log("boot", "FATAL: first account env missing. Exiting.")
         return
+
     boot = TelegramClient(StringSession(first), API_ID, API_HASH)
     await boot.start()
-    target = await boot.get_entity(TARGET_GROUP)
-    log("boot", f"target resolved: {getattr(target,'id',None)} megagroup={getattr(target,'megagroup',None)}")
+    try:
+        target = await boot.get_entity(TARGET_GROUP)
+        log("boot", f"target resolved: {getattr(target,'id',None)} megagroup={getattr(target,'megagroup',None)}")
+    except Exception as e:
+        log("boot", f"target resolve failed: {e}")
+        await boot.disconnect()
+        return
     await boot.disconnect()
 
     candidates = load_candidates()
     log("boot", f"candidates: {len(candidates)}")
 
     tasks = []
-    for cfg in ACCOUNTS:
-        tasks.append(run_account(cfg, candidates, target))
-        # stagger start 5-15 min
-        await asyncio.sleep(random.uniform(300, 900))
+    for i, cfg in enumerate(ACCOUNTS):
+        offset = i * random.uniform(300, 900)  # 5-15 min per account
+        tasks.append(run_account(cfg, candidates, target, offset))
 
-    results = await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
     total = add.execute("SELECT COUNT(*) FROM added").fetchone()[0]
-    log("boot", f"ALL DONE this_run={sum(results)} total_db={total}")
+    log("boot", f"ALL DONE results={results} total_db={total}")
 
 if __name__ == "__main__":
     try:
